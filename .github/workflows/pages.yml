@@ -29,14 +29,14 @@ jobs:
           GITHUB_PAGES: "1"
         run: |
           set +e
-          node scripts/with-app-env.mjs vite build
-          code=$?
+          npm run build
           if [ -f .output/public/index.html ]; then
             echo "Prerendered index.html found"
+            ls -la .output/public
             exit 0
           fi
           echo "Build failed without index.html"
-          exit "$code"
+          exit 1
       - name: Prepare Pages
         run: |
           set -e
