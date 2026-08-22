@@ -1,0 +1,59 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          GITHUB_PAGES: "1"
+      - name: Prepare Pages
+        run: |
+          set -e
+          if [ -d .output/public ]; then DIR=.output/public
+          elif [ -d dist ]; then DIR=dist
+          elif [ -d .vercel/output/static ]; then DIR=.vercel/output/static
+          else
+            echo "No static output found"
+            ls -la
+            exit 1
+          fi
+          mkdir -p _site
+          cp -a "$DIR"/. _site/
+          touch _site/.nojekyll
+          if [ -f _site/index.html ] && [ ! -f _site/404.html ]; then
+            cp _site/index.html _site/404.html
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
