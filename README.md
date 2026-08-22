@@ -6,7 +6,9 @@
 
 ## 公開ページ
 
-https://lunaneco.github.io/illust-supasupa/
+https://lunaneco.github.io/
+
+ソース: https://github.com/Lunaneco/illust-supasupa
 
 ## できること
 
@@ -15,10 +17,3 @@ https://lunaneco.github.io/illust-supasupa/
 - 縦横すきまなく分割（余りピクセルも分配）
 - 添付サイズの変更
 - JPEG なら iPhone の写真アプリへ保存
-
-## 開発
-
-```bash
-npm install
-npm run dev
-```

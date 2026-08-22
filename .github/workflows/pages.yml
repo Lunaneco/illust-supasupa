@@ -1,18 +1,9 @@
-name: Deploy GitHub Pages
+name: Check Pages build
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -24,50 +15,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Build
+      - name: Build static site
         env:
           GITHUB_PAGES: "1"
+          GITHUB_PAGES_BASE: "/"
         run: npm run build
-      - name: Prepare Pages
-        run: |
-          python3 <<'PY'
-          import glob, os, pathlib, shutil
-          src = ".vercel/output/static" if os.path.isdir(".vercel/output/static") else ".output/public"
-          if not os.path.isdir(src):
-              raise SystemExit("No static output found")
-          os.makedirs("_site", exist_ok=True)
-          os.system(f"cp -a {src}/. _site/")
-          css = os.path.basename(glob.glob("_site/assets/styles-*.css")[0])
-          js = os.path.basename(glob.glob("_site/assets/index-*.js")[0])
-          html = f"""<!DOCTYPE html>
-          <html lang="ja">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>イラストすぱすぱ</title>
-            <meta name="description" content="イラストをすきまなく、すぱっと分割" />
-            <link rel="icon" type="image/svg+xml" href="/illust-supasupa/favicon.svg" />
-            <link rel="stylesheet" href="/illust-supasupa/assets/{css}" />
-            <script type="module" src="/illust-supasupa/assets/{js}"></script>
-          </head>
-          <body></body>
-          </html>
-          """
-          pathlib.Path("_site/index.html").write_text(html)
-          pathlib.Path("_site/404.html").write_text(html)
-          pathlib.Path("_site/.nojekyll").write_text("")
-          print("wrote", css, js)
-          PY
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

@@ -146,7 +146,8 @@ function authPopupPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 const githubPages = process.env.GITHUB_PAGES === "1";
-const pagesBase = "/illust-supasupa/";
+const pagesBase = process.env.GITHUB_PAGES_BASE ?? "/illust-supasupa/";
+const pagesBasepath = pagesBase.replace(/\/$/, "");
 
 export default defineConfig(({ command, isPreview }) => ({
   base: githubPages ? pagesBase : undefined,
@@ -172,7 +173,10 @@ export default defineConfig(({ command, isPreview }) => ({
     tailwindcss(),
     tanstackStart(
       githubPages
-        ? { router: { basepath: "/illust-supasupa" } }
+        ? {
+            spa: { enabled: true },
+            ...(pagesBasepath ? { router: { basepath: pagesBasepath } } : {}),
+          }
         : {},
     ),
     ...(command === "build" || isPreview
