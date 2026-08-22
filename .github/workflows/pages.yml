@@ -24,9 +24,19 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build
         env:
           GITHUB_PAGES: "1"
+        run: |
+          set +e
+          node scripts/with-app-env.mjs vite build
+          code=$?
+          if [ -f .output/public/index.html ]; then
+            echo "Prerendered index.html found"
+            exit 0
+          fi
+          echo "Build failed without index.html"
+          exit "$code"
       - name: Prepare Pages
         run: |
           set -e
