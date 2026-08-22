@@ -27,33 +27,37 @@ jobs:
       - name: Build
         env:
           GITHUB_PAGES: "1"
-        run: |
-          set +e
-          npm run build
-          if [ -f .output/public/index.html ]; then
-            echo "Prerendered index.html found"
-            ls -la .output/public
-            exit 0
-          fi
-          echo "Build failed without index.html"
-          exit 1
+        run: npm run build
       - name: Prepare Pages
         run: |
-          set -e
-          if [ -d .output/public ]; then DIR=.output/public
-          elif [ -d dist ]; then DIR=dist
-          elif [ -d .vercel/output/static ]; then DIR=.vercel/output/static
-          else
-            echo "No static output found"
-            ls -la
-            exit 1
-          fi
-          mkdir -p _site
-          cp -a "$DIR"/. _site/
-          touch _site/.nojekyll
-          if [ -f _site/index.html ] && [ ! -f _site/404.html ]; then
-            cp _site/index.html _site/404.html
-          fi
+          python3 <<'PY'
+          import glob, os, pathlib, shutil
+          src = ".vercel/output/static" if os.path.isdir(".vercel/output/static") else ".output/public"
+          if not os.path.isdir(src):
+              raise SystemExit("No static output found")
+          os.makedirs("_site", exist_ok=True)
+          os.system(f"cp -a {src}/. _site/")
+          css = os.path.basename(glob.glob("_site/assets/styles-*.css")[0])
+          js = os.path.basename(glob.glob("_site/assets/index-*.js")[0])
+          html = f"""<!DOCTYPE html>
+          <html lang="ja">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>イラストすぱすぱ</title>
+            <meta name="description" content="イラストをすきまなく、すぱっと分割" />
+            <link rel="icon" type="image/svg+xml" href="/illust-supasupa/favicon.svg" />
+            <link rel="stylesheet" href="/illust-supasupa/assets/{css}" />
+            <script type="module" src="/illust-supasupa/assets/{js}"></script>
+          </head>
+          <body></body>
+          </html>
+          """
+          pathlib.Path("_site/index.html").write_text(html)
+          pathlib.Path("_site/404.html").write_text(html)
+          pathlib.Path("_site/.nojekyll").write_text("")
+          print("wrote", css, js)
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

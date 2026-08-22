@@ -172,21 +172,17 @@ export default defineConfig(({ command, isPreview }) => ({
     tailwindcss(),
     tanstackStart(
       githubPages
-        ? {
-            spa: { enabled: true },
-            router: { basepath: "/illust-supasupa" },
-            prerender: { enabled: true },
-          }
+        ? { router: { basepath: "/illust-supasupa" } }
         : {},
     ),
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset: githubPages ? "github-pages" : "vercel",
+            preset: "vercel",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
-            ...(githubPages ? {} : { serverDir: "./server" }),
+            serverDir: "./server",
           }),
         ]
       : []),
