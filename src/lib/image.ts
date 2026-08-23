@@ -1,5 +1,6 @@
 import type { Tile } from "./split";
 import type { CropRect } from "./crop";
+import { drawFrame, type FrameDef } from "./frames";
 
 export type LoadedImage = {
   name: string;
@@ -139,6 +140,25 @@ export function cropAndScale(
   canvas.height = destH;
   const ctx = canvas2d(canvas, true);
   drawRect(ctx, bitmap, crop.x, crop.y, crop.width, crop.height, destW, destH);
+  return canvas;
+}
+
+export async function applyFrameToImage(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+  frame?: FrameDef | null,
+  weight = 1,
+): Promise<CanvasImageSource> {
+  if (!frame || frame.kind === "none") return source;
+  const destW = Math.max(1, Math.round(width));
+  const destH = Math.max(1, Math.round(height));
+  const canvas = document.createElement("canvas");
+  canvas.width = destW;
+  canvas.height = destH;
+  const ctx = canvas2d(canvas, true);
+  ctx.drawImage(source, 0, 0, destW, destH);
+  await drawFrame(ctx, destW, destH, frame, weight);
   return canvas;
 }
 

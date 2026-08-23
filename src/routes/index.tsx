@@ -14,6 +14,7 @@ import { toast, Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Decor } from "@/components/decor";
 import { CropStage } from "@/components/splitter/crop-stage";
+import { FrameThumb, CroppedFrameOverlay } from "@/components/splitter/frame-overlay";
 import { TileBoard, tileSpriteStyle } from "@/components/splitter/tile-board";
 import { cn } from "@/lib/utils";
 import {
@@ -30,6 +31,7 @@ import {
 import {
   copyPng,
   cropAndScale,
+  applyFrameToImage,
   disposeImage,
   isAppleTouchDevice,
   loadImageSource,
@@ -46,6 +48,16 @@ import {
   type AspectLock,
   type CropRect,
 } from "@/lib/crop";
+import {
+  FRAMES,
+  FRAME_WEIGHT_DEFAULT,
+  FRAME_WEIGHT_MAX,
+  FRAME_WEIGHT_MIN,
+  frameById,
+  preloadFrames,
+  type FrameDef,
+  type FrameId,
+} from "@/lib/frames";
 import {
   isOriginal,
   originalSize,
@@ -113,6 +125,9 @@ function Home() {
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 });
   const [aspect, setAspect] = useState<AspectLock>(null);
   const [saveToPhotos, setSaveToPhotos] = useState(false);
+  const [frameId, setFrameId] = useState<FrameId>("none");
+  const [frameWeight, setFrameWeight] = useState(FRAME_WEIGHT_DEFAULT);
+  const frame = frameById(frameId);
 
   const maxCols = image ? Math.min(MAX_GRID, out.width, crop.width) : MAX_GRID;
   const maxRows = image ? Math.min(MAX_GRID, out.height, crop.height) : MAX_GRID;
@@ -182,6 +197,7 @@ function Home() {
 
   useEffect(() => {
     setSaveToPhotos(isAppleTouchDevice());
+    preloadFrames();
   }, []);
 
   const ingestFile = useCallback(
@@ -253,15 +269,16 @@ function Home() {
 
   const jpegToPhotos = mime === "image/jpeg" && saveToPhotos;
 
-  const sourceForExport = () => {
+  const sourceForExport = async () => {
     if (!image) throw new Error("画像がありません");
-    return cropAndScale(image.bitmap, crop, out.width, out.height);
+    const scaled = cropAndScale(image.bitmap, crop, out.width, out.height);
+    return applyFrameToImage(scaled, out.width, out.height, frame, frameWeight);
   };
 
   const exportTile = async (tile: Tile) => {
     if (!image) return;
     try {
-      const blob = await rasterizeTile(sourceForExport(), tile, mime, quality);
+      const blob = await rasterizeTile(await sourceForExport(), tile, mime, quality);
       const result = await saveImages(
         [{ blob, filename: tileFilename(stem, tile, rows, cols, ext) }],
         mime,
@@ -278,7 +295,7 @@ function Home() {
     if (!image || tiles.length === 0) return;
     try {
       setBusy(`保存中 0 / ${tiles.length}`);
-      const source = sourceForExport();
+      const source = await sourceForExport();
       const items: { blob: Blob; filename: string }[] = [];
       for (let i = 0; i < tiles.length; i++) {
         const tile = tiles[i]!;
@@ -303,7 +320,7 @@ function Home() {
   const copyActive = async () => {
     if (!image || !activeExport) return;
     try {
-      const blob = await rasterizeTile(sourceForExport(), activeExport, "image/png", 1);
+      const blob = await rasterizeTile(await sourceForExport(), activeExport, "image/png", 1);
       await copyPng(blob);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
@@ -368,6 +385,8 @@ function Home() {
               rows={rows}
               tileCount={tiles.length}
               aspect={aspect}
+              frame={frame}
+              frameWeight={frameWeight}
               onCropChange={applyCrop}
             />
             <p className="text-xs tabular-nums text-faint">
@@ -574,60 +593,53 @@ function Home() {
             </div>
 
             <div className="rounded-xl bg-surface p-4 shadow-border">
-              <p className="text-xs font-medium tracking-tight text-muted">
-                書き出し
+              <p className="text-xs font-medium tracking-tight text-muted">枠</p>
+              <p className="mt-1 text-xs text-faint">
+                {frame.id === "none"
+                  ? "切り取る画像のまわりに付けます。すぱっと切ると枠も一緒に切れます。"
+                  : `${frame.hint}。切り取る画像の周囲に付いて、スライスで枠も切れます。`}
               </p>
-              <div className="mt-3 flex gap-2">
-                {(
-                  [
-                    ["image/png", "PNG"],
-                    ["image/jpeg", "JPEG"],
-                    ["image/webp", "WebP"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Button
-                    key={value}
-                    size="sm"
-                    variant={mime === value ? "default" : "outline"}
-                    onClick={() => setMime(value)}
-                    className="flex-1"
-                  >
-                    {label}
-                  </Button>
-                ))}
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {FRAMES.map((item) => {
+                  const on = item.id === frameId;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setFrameId(item.id)}
+                      className="min-h-11 text-left"
+                      aria-pressed={on}
+                      aria-label={item.label}
+                    >
+                      <FrameThumb frame={item} active={on} />
+                      <span
+                        className={cn(
+                          "mt-1 block text-center text-xs",
+                          on ? "text-fg" : "text-muted",
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              {mime !== "image/png" ? (
+              {frame.id !== "none" ? (
                 <label className="mt-4 block">
                   <span className="text-xs text-muted">
-                    品質 {Math.round(quality * 100)}
+                    太さ {Math.round(frameWeight * 100)}
                   </span>
                   <input
                     type="range"
-                    min={0.6}
-                    max={1}
-                    step={0.02}
-                    value={quality}
-                    onChange={(event) => setQuality(Number(event.target.value))}
+                    min={FRAME_WEIGHT_MIN}
+                    max={FRAME_WEIGHT_MAX}
+                    step={0.05}
+                    value={frameWeight}
+                    onChange={(event) => setFrameWeight(Number(event.target.value))}
                     className="mt-2 h-11 w-full accent-primary"
                   />
                 </label>
               ) : null}
-
-              {jpegToPhotos ? (
-                <p className="mt-3 text-xs text-faint">
-                  保存すると写真アプリに入ります。
-                </p>
-              ) : null}
-
-              <Button
-                size="lg"
-                className="mt-4 w-full"
-                disabled={Boolean(busy) || tiles.length === 0}
-                onClick={() => void exportAll()}
-              >
-                <Download className="size-4" />
-                {jpegToPhotos ? "写真に保存" : `すべて ${ext.toUpperCase()} で保存`}
-              </Button>
             </div>
           </aside>
         </div>
@@ -647,9 +659,72 @@ function Home() {
             imageHeight={image.height}
             cols={cols}
             tiles={previewTiles}
+            frame={frame}
+            cropX={crop.x}
+            cropY={crop.y}
+            cropWidth={crop.width}
+            cropHeight={crop.height}
+            frameWeight={frameWeight}
             activeIndex={activeIndex}
             onSelect={(tile) => setActiveIndex(tile.index)}
           />
+
+          <div className="mt-8 rounded-xl bg-surface p-4 shadow-border">
+            <p className="text-xs font-medium tracking-tight text-muted">
+              書き出し
+            </p>
+            <div className="mt-3 flex gap-2">
+              {(
+                [
+                  ["image/png", "PNG"],
+                  ["image/jpeg", "JPEG"],
+                  ["image/webp", "WebP"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={mime === value ? "default" : "outline"}
+                  onClick={() => setMime(value)}
+                  className="flex-1"
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {mime !== "image/png" ? (
+              <label className="mt-4 block">
+                <span className="text-xs text-muted">
+                  品質 {Math.round(quality * 100)}
+                </span>
+                <input
+                  type="range"
+                  min={0.6}
+                  max={1}
+                  step={0.02}
+                  value={quality}
+                  onChange={(event) => setQuality(Number(event.target.value))}
+                  className="mt-2 h-11 w-full accent-primary"
+                />
+              </label>
+            ) : null}
+
+            {jpegToPhotos ? (
+              <p className="mt-3 text-xs text-faint">
+                保存すると写真アプリに入ります。
+              </p>
+            ) : null}
+
+            <Button
+              size="lg"
+              className="mt-4 w-full"
+              disabled={Boolean(busy) || tiles.length === 0}
+              onClick={() => void exportAll()}
+            >
+              <Download className="size-4" />
+              {jpegToPhotos ? "写真に保存" : `すべて ${ext.toUpperCase()} で保存`}
+            </Button>
+          </div>
         </section>
       ) : null}
 
@@ -661,6 +736,12 @@ function Home() {
           tile={activePreview}
           exportWidth={activeExport.width}
           exportHeight={activeExport.height}
+          frame={frame}
+          cropX={crop.x}
+          cropY={crop.y}
+          cropWidth={crop.width}
+          cropHeight={crop.height}
+          frameWeight={frameWeight}
           copied={copied}
           onClose={() => setActiveIndex(null)}
           onDownload={() => void exportTile(activeExport)}
@@ -950,6 +1031,12 @@ function TileDialog({
   tile,
   exportWidth,
   exportHeight,
+  frame,
+  cropX,
+  cropY,
+  cropWidth,
+  cropHeight,
+  frameWeight = 1,
   copied,
   onClose,
   onDownload,
@@ -961,6 +1048,12 @@ function TileDialog({
   tile: Tile;
   exportWidth: number;
   exportHeight: number;
+  frame: FrameDef;
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
+  frameWeight?: number;
   copied: boolean;
   onClose: () => void;
   onDownload: () => void;
@@ -999,13 +1092,25 @@ function TileDialog({
           className="overflow-hidden rounded-none bg-transparent"
           style={{ aspectRatio: `${tile.width} / ${tile.height}` }}
         >
-          <div className="relative h-full w-full overflow-hidden">
+          <div
+            className="relative h-full w-full overflow-hidden"
+            style={{ containerType: "size" }}
+          >
             <img
               src={src}
               alt=""
               draggable={false}
               className="absolute max-w-none select-none"
               style={tileSpriteStyle(tile, imageWidth, imageHeight)}
+            />
+            <CroppedFrameOverlay
+              frame={frame}
+              tile={tile}
+              originX={cropX}
+              originY={cropY}
+              originWidth={cropWidth}
+              originHeight={cropHeight}
+              weight={frameWeight}
             />
           </div>
         </div>

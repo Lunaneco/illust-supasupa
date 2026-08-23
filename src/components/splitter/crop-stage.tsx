@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { sliceBounds } from "@/lib/split";
+import { FrameOverlay } from "@/components/splitter/frame-overlay";
+import type { FrameDef } from "@/lib/frames";
 import {
   moveCrop,
   resizeCrop,
@@ -29,6 +31,8 @@ type CropStageProps = {
   rows: number;
   tileCount: number;
   aspect: AspectLock;
+  frame: FrameDef;
+  frameWeight?: number;
   onCropChange: (crop: CropRect) => void;
 };
 
@@ -41,6 +45,8 @@ export function CropStage({
   rows,
   tileCount,
   aspect,
+  frame,
+  frameWeight = 1,
   onCropChange,
 }: CropStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -163,7 +169,8 @@ export function CropStage({
 
       <div
         className={cn(
-          "absolute outline outline-2 outline-primary",
+          "absolute overflow-hidden",
+          frame.kind === "none" ? "outline outline-2 outline-primary" : "",
           drag && drag !== "move" ? "" : "cursor-grab",
         )}
         style={{
@@ -171,9 +178,11 @@ export function CropStage({
           top: `${top}%`,
           width: `${width}%`,
           height: `${height}%`,
+          containerType: "size",
         }}
         onPointerDown={(event) => beginDrag(event, "move")}
       >
+        <FrameOverlay frame={frame} weight={frameWeight} />
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           {xs.slice(1, -1).map((x) => (
             <div

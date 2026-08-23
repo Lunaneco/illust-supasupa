@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Tile } from "@/lib/split";
+import type { FrameDef } from "@/lib/frames";
+import { CroppedFrameOverlay } from "@/components/splitter/frame-overlay";
 import { cn } from "@/lib/utils";
 
 export function tileSpriteStyle(
@@ -21,6 +23,12 @@ type TileBoardProps = {
   imageHeight: number;
   cols: number;
   tiles: Tile[];
+  frame: FrameDef;
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
+  frameWeight?: number;
   activeIndex: number | null;
   onSelect: (tile: Tile) => void;
 };
@@ -31,6 +39,12 @@ export function TileBoard({
   imageHeight,
   cols,
   tiles,
+  frame,
+  cropX,
+  cropY,
+  cropWidth,
+  cropHeight,
+  frameWeight = 1,
   activeIndex,
   onSelect,
 }: TileBoardProps) {
@@ -55,7 +69,10 @@ export function TileBoard({
           >
             <div
               className="relative overflow-hidden"
-              style={{ aspectRatio: `${tile.width} / ${tile.height}` }}
+              style={{
+                aspectRatio: `${tile.width} / ${tile.height}`,
+                containerType: "size",
+              }}
             >
               <img
                 src={src}
@@ -63,6 +80,15 @@ export function TileBoard({
                 draggable={false}
                 className="absolute max-w-none select-none"
                 style={tileSpriteStyle(tile, imageWidth, imageHeight)}
+              />
+              <CroppedFrameOverlay
+                frame={frame}
+                tile={tile}
+                originX={cropX}
+                originY={cropY}
+                originWidth={cropWidth}
+                originHeight={cropHeight}
+                weight={frameWeight}
               />
             </div>
             <span className="pointer-events-none absolute top-1 left-1 rounded-xs bg-surface/80 px-1.5 py-0.5 text-xs tabular-nums text-fg">
